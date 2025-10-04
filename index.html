@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>LeafLog – 観葉植物 水やり管理</title>
+  <meta name="description" content="観葉植物の水やりを記録・通知。ローカルストレージだけで動くシングルページアプリ。" />
+  <meta name="theme-color" content="#5ac49a" />
+  <style>
+    /* ====== Reset (小さめ) ====== */
+    *,*::before,*::after{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;line-height:1.6;-webkit-font-smoothing:antialiased}
+    img,svg{display:block;max-width:100%}
+    button,input,select,textarea{font:inherit}
+
+    /* ====== Theme ====== */
+    :root{
+      --bg: #0f1220;           /* 深めの紺 */
+      --bg-soft: #121530;
+      --panel: rgba(255,255,255,.06);
+      --border: rgba(255,255,255,.12);
+      --text: #eef3f3;
+      --muted:#a7b1b1;
+      --brand: #59d1a9;
+      --brand-2: #85f2cc;
+      --accent: #6da6ff;
+      --danger: #ff6b6b;
+      --warn: #ffd166;
+      --ok: #7ed957;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 16px;
+      --radius-lg: 22px;
+    }
+    [data-theme="light"]{
+      --bg:#f7faf9; --bg-soft:#f2f5f7; --panel:#ffffffcc; --border:#00000014; --text:#11181c; --muted:#4b5563;
+      --shadow: 0 10px 30px rgba(8,16,24,.08);
+    }
+    @media (prefers-color-scheme: light){
+      :root{ color-scheme:light; }
+    }
+
+    body{
+      background: radial-gradient(1100px 700px at 10% -10%, #3a4564 0%, transparent 60%),
+                  radial-gradient(1000px 600px at 120% 0%, #255f6d 0%, transparent 60%),
+                  linear-gradient(180deg, var(--bg) 0%, var(--bg) 100%);
+      color:var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", "Meiryo", Arial, sans-serif;
+      letter-spacing:.2px;
+    }
+
+    /* ====== Layout ====== */
+    .container{max-width:1100px;margin-inline:auto;padding:28px}
+    header{display:flex;align-items:center;gap:14px;justify-content:space-between;margin-bottom:24px}
+    .brand{display:flex;align-items:center;gap:12px}
+    .logo{width:38px;height:38px;border-radius:12px;background:
+      conic-gradient(from 180deg at 50% 50%, var(--brand), var(--brand-2), var(--accent), var(--brand));
+      box-shadow: 0 10px 24px rgba(90,196,154,.35), inset 0 0 28px rgba(255,255,255,.22);
+    }
+    .title{font-weight:800;font-size:1.25rem;letter-spacing:.3px}
+    .subtitle{font-size:.9rem;color:var(--muted)}
+
+    .toolbar{display:flex;gap:10px;align-items:center}
+    .btn{padding:10px 14px;border-radius:12px;border:1px solid var(--border);background:var(--panel);
+      color:var(--text);cursor:pointer;box-shadow:var(--shadow);backdrop-filter: blur(10px);
+      transition: transform .06s ease, background .2s ease, border-color .2s ease, opacity .2s ease;
+    }
+    .btn:hover{transform: translateY(-1px)}
+    .btn:active{transform: translateY(0)}
+    .btn-primary{background:linear-gradient(180deg, var(--brand-2), var(--brand)); color:#0d1b18;border-color:transparent;font-weight:700}
+    .btn-danger{background:linear-gradient(180deg, #ffb4b4, var(--danger)); color:#2b0a0a;border-color:transparent;font-weight:700}
+    .btn-ghost{background:transparent;border-color:var(--border)}
+    .pill{padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:var(--panel);font-size:.85rem;color:var(--muted)}
+
+    .filters{display:flex;gap:8px;flex-wrap:wrap}
+    .filters .seg{padding:8px 12px;border-radius:999px;border:1px solid var(--border);background:var(--panel);cursor:pointer}
+    .filters .seg[aria-pressed="true"]{background:linear-gradient(180deg, #d4ffe5, #b8ffd7); color:#0b3d2e; border-color:transparent; font-weight:700}
+
+    .grid{display:grid;grid-template-columns: repeat(auto-fill, minmax(260px,1fr)); gap:16px;margin-top:16px}
+
+    .card{position:relative;border:1px solid var(--border);background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.04));
+      padding:16px;border-radius:var(--radius);box-shadow:var(--shadow);backdrop-filter: blur(12px);}
+    .card h3{margin:2px 0 6px;font-size:1.05rem}
+    .meta{font-size:.9rem;color:var(--muted)}
+
+    .chip{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid var(--border);font-size:.8rem}
+    .chip.over{background:#ffe9e9;color:#5b1212;border-color:#ffd0d0}
+    .chip.soon{background:#fff7da;color:#684f00;border-color:#ffe9a5}
+    .chip.ok{background:#e9ffe6;color:#0f3b08;border-color:#caffb8}
+
+    .row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
+    .row .left{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+    .actions{display:flex;gap:8px}
+    .icon-btn{display:inline-grid;place-items:center;width:36px;height:36px;border-radius:10px;border:1px solid var(--border);
+      background:var(--panel);cursor:pointer}
+    .icon-btn:hover{transform:translateY(-1px)}
+
+    .empty{border:1px dashed var(--border);padding:28px;border-radius:var(--radius-lg);text-align:center;color:var(--muted);margin-top:18px}
+
+    /* ====== Modal (dialog) ====== */
+    dialog{border:none;border-radius:20px;max-width:560px;width:92vw;padding:0;background:transparent}
+    dialog::backdrop{background: rgba(0,0,0,.5)}
+    .modal{border:1px solid var(--border);background:var(--panel);backdrop-filter: blur(12px); box-shadow:var(--shadow);
+      padding:20px;border-radius:20px}
+    .modal h2{margin:0 0 12px}
+    .form{display:grid;gap:12px}
+    label{font-size:.9rem;color:var(--muted)}
+    input[type="text"], input[type="number"], input[type="date"], textarea{
+      width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,.85);
+      color:#0b1616;outline:none
+    }
+    textarea{min-height:72px;resize:vertical}
+
+    /* ====== Footer info ====== */
+    .footer{margin-top:28px;color:var(--muted);font-size:.85rem;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+
+    /* ====== Utility ====== */
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  </style>
+</head>
+<body>
+  <div class="container" id="app">
+    <header>
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div>
+          <div class="title">LeafLog</div>
+          <div class="subtitle">観葉植物の「水やり」を、気持ちよく。</div>
+        </div>
+      </div>
+      <div class="toolbar">
+        <button class="btn pill" id="notifBtn" title="デスクトップ通知"><span id="notifState">🔔 通知オフ</span></button>
+        <button class="btn pill" id="backupBtn" title="バックアップ(JSON)をダウンロード">💾 バックアップ</button>
+        <label class="btn pill" title="バックアップから復元">
+          ⤴️ 復元
+          <input id="restoreInput" type="file" accept="application/json" class="sr-only" />
+        </label>
+        <button class="btn" id="themeBtn" title="テーマ切替">🌗 テーマ</button>
+        <button class="btn btn-primary" id="addBtn">＋ 植物を追加</button>
+      </div>
+    </header>
+
+    <section class="row" aria-label="フィルター">
+      <div class="left filters" id="filters">
+        <button class="seg" data-filter="all" aria-pressed="true">すべて</button>
+        <button class="seg" data-filter="due">期限到来</button>
+        <button class="seg" data-filter="soon">24時間以内</button>
+        <button class="seg" data-filter="ok">余裕あり</button>
+      </div>
+      <div class="pill" id="summary">0鉢</div>
+    </section>
+
+    <section id="grid" class="grid" aria-live="polite" aria-busy="false"></section>
+    <div id="empty" class="empty" hidden>
+      まだ植物がありません。<br />
+      右上の「植物を追加」から始めましょう🌱
+    </div>
+
+    <div class="footer">
+      <div>ローカルストレージで動作。ユーザー登録不要。</div>
+      <div id="clock">--:--</div>
+    </div>
+  </div>
+
+  <!-- ====== Add/Edit Modal ====== -->
+  <dialog id="plantDialog" aria-label="植物フォーム">
+    <form method="dialog" class="modal" id="plantForm">
+      <h2 id="dialogTitle">植物を追加</h2>
+      <div class="form">
+        <div>
+          <label for="name">名前（例：ポトス）</label>
+          <input id="name" name="name" type="text" required maxlength="30" placeholder="レオン" />
+        </div>
+        <div>
+          <label for="species">種類（任意）</label>
+          <input id="species" name="species" type="text" maxlength="40" placeholder="フィカス・ウンベラータ" />
+        </div>
+        <div class="row">
+          <div style="flex:1">
+            <label for="freq">水やり間隔（日）</label>
+            <input id="freq" name="freq" type="number" min="1" max="60" value="7" required />
+          </div>
+          <div style="flex:1">
+            <label for="last">最後に水やりした日</label>
+            <input id="last" name="last" type="date" />
+          </div>
+        </div>
+        <div>
+          <label for="notes">メモ（置き場所や光など）</label>
+          <textarea id="notes" name="notes" placeholder="北側の窓辺。乾いたらたっぷり。"></textarea>
+        </div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <div class="left">
+          <button class="btn btn-danger" id="deleteBtn" type="button" hidden>🗑️ 削除</button>
+        </div>
+        <div class="actions">
+          <button class="btn btn-ghost" value="cancel">キャンセル</button>
+          <button class="btn btn-primary" id="saveBtn" value="default">保存</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    // ====== 小さなユーティリティ ======
+    const $ = (sel, el=document) => el.querySelector(sel);
+    const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));
+    const pad = (n)=> String(n).padStart(2,'0');
+    const todayDateStr = ()=>{ const d=new Date(); d.setHours(0,0,0,0); return d; };
+    const toDateInput = (d)=> `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    const parseDateInput = (s)=>{ const [y,m,dd]=s.split('-').map(Number); const d=new Date(y,m-1,dd); d.setHours(0,0,0,0); return d; };
+    const addDays = (d, n)=>{ const x=new Date(d); x.setDate(x.getDate()+n); return x };
+    const fmt = (d)=> new Intl.DateTimeFormat('ja-JP',{ dateStyle:'medium'}).format(d);
+    const nowISO = ()=> new Date().toISOString();
+
+    function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,9); }
+
+    // 状態の種類: over(期限到来/超過), soon(24h以内), ok
+    function statusOf(next){
+      const now = new Date();
+      if(next <= now) return 'over';
+      const diff = next - now; // ms
+      if(diff <= 24*60*60*1000) return 'soon';
+      return 'ok';
+    }
+
+    // 次の水やり日 = 最後の水やり + 間隔（日）
+    function calcNext(lastDate, freqDays){
+      return addDays(lastDate, Number(freqDays));
+    }
+
+    // ====== ローカルストレージ層 ======
+    const LS_KEY = 'leaflog_plants_v1';
+    function loadPlants(){
+      try{ const raw = localStorage.getItem(LS_KEY); if(!raw) return []; const arr = JSON.parse(raw); return arr.map(p=>({...p, last:new Date(p.last), next:new Date(p.next)})); }
+      catch(e){ console.error(e); return [] }
+    }
+    function savePlants(plants){
+      localStorage.setItem(LS_KEY, JSON.stringify(plants.map(p=>({...p, last:p.last.toISOString(), next:p.next.toISOString()}))));
+    }
+
+    // ====== シンプルなストア（リアクティブっぽい） ======
+    const store = new Proxy({
+      plants: loadPlants(),
+      filter: 'all',
+      theme: localStorage.getItem('leaflog_theme') || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'),
+      selectedId: null,
+    },{
+      set(obj, key, value){
+        obj[key] = value;
+        if(key==='plants') savePlants(obj.plants);
+        render();
+        return true;
+      }
+    });
+
+    // 初期データ（空ならサンプルを1件）
+    if(store.plants.length===0){
+      const last = todayDateStr(); last.setDate(last.getDate()-2); // 2日前
+      const next = calcNext(last, 7);
+      store.plants = [{ id:uid(), name:'レオン', species:'ポトス', freq:7, last, next, notes:'北側の窓辺。乾いたらたっぷり。', notifiedFor:null, createdAt: nowISO() }];
+    }
+
+    // ====== 通知 ======
+    function updateNotifUI(){
+      const el = $('#notifState');
+      if(!('Notification' in window)) { el.textContent = '🔕 通知非対応'; return }
+      const p = Notification.permission;
+      el.textContent = p==='granted' ? '🔔 通知オン' : (p==='denied' ? '🔕 通知拒否' : '🔔 許可してね');
+    }
+    async function requestNotif(){
+      if(!('Notification' in window)) return alert('このブラウザは通知に対応していません');
+      const res = await Notification.requestPermission();
+      updateNotifUI();
+      if(res==='granted'){
+        new Notification('LeafLog 通知をオンにしました 🌿',{ body:'期限が来たらお知らせします（タブを閉じると通知は止まります）' });
+      }
+    }
+    function maybeNotify(plant){
+      if(!('Notification' in window) || Notification.permission!=='granted') return;
+      const next = new Date(plant.next);
+      const key = next.toISOString();
+      if(plant.notifiedFor === key) return; // 同じ期日で重複通知しない
+      const now = new Date();
+      if(now >= next){
+        const n = new Notification(`水やりタイム：${plant.name}` ,{
+          body:`${fmt(next)} が目安。記録したら「今水やり」ボタン！`,
+        });
+        n.onclick = ()=> window.focus();
+        // 記録
+        plant.notifiedFor = key;
+        store.plants = [...store.plants]; // 変更を保存＆再描画
+      }
+    }
+
+    function pollDue(){
+      store.plants.forEach(p=> maybeNotify(p));
+    }
+    setInterval(pollDue, 60*1000); // 1分おき
+    document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) pollDue(); });
+
+    // ====== レンダリング ======
+    function render(){
+      document.documentElement.setAttribute('data-theme', store.theme);
+      updateNotifUI();
+      $('#summary').textContent = `${store.plants.length}鉢`;
+
+      const grid = $('#grid');
+      const empty = $('#empty');
+
+      // フィルタ
+      const now = new Date();
+      const filtered = store.plants.filter(p=>{
+        const status = statusOf(new Date(p.next));
+        if(store.filter==='all') return true;
+        if(store.filter==='due') return status==='over';
+        if(store.filter==='soon') return status==='soon';
+        if(store.filter==='ok') return status==='ok';
+      });
+
+      // ソート: over -> soon -> ok、さらに次回日付が早い順
+      const order = {over:0, soon:1, ok:2};
+      filtered.sort((a,b)=>{
+        const sa = order[statusOf(new Date(a.next))];
+        const sb = order[statusOf(new Date(b.next))];
+        if(sa!==sb) return sa-sb;
+        return new Date(a.next) - new Date(b.next);
+      });
+
+      grid.innerHTML = '';
+      if(filtered.length===0){ empty.hidden=false; grid.setAttribute('aria-busy','false'); return }
+      empty.hidden=true;
+
+      for(const p of filtered){
+        const next = new Date(p.next);
+        const last = new Date(p.last);
+        const s = statusOf(next);
+        const leftDays = Math.ceil((next - now) / (24*60*60*1000));
+
+        const card = document.createElement('article');
+        card.className = 'card';
+        card.innerHTML = `
+          <h3>${escapeHtml(p.name)}</h3>
+          <div class="meta">${escapeHtml(p.species||'（種類 未設定）')}</div>
+          <div class="row" style="margin-top:8px">
+            <div class="left">
+              <span class="chip ${s}">
+                ${s==='over' ? '⏰ 期限到来' : s==='soon' ? '🟡 もうすぐ' : '🟢 余裕あり'}
+              </span>
+              <span class="pill">次回：${fmt(next)}</span>
+              <span class="pill">前回：${fmt(last)}</span>
+              <span class="pill">間隔：${p.freq}日</span>
+            </div>
+          </div>
+          <p class="meta" style="margin-top:8px">${escapeHtml(p.notes||'')}</p>
+          <div class="row" style="margin-top:12px">
+            <div class="left"></div>
+            <div class="actions">
+              <button class="btn icon-btn" title="今水やり" data-act="water">💧</button>
+              <button class="btn icon-btn" title="編集" data-act="edit">✏️</button>
+              <button class="btn icon-btn" title="削除" data-act="delete">🗑️</button>
+            </div>
+          </div>
+        `;
+
+        card.querySelector('[data-act="water"]').onclick = ()=> waterNow(p.id);
+        card.querySelector('[data-act="edit"]').onclick = ()=> openDialog('edit', p.id);
+        card.querySelector('[data-act="delete"]').onclick = ()=> deletePlant(p.id);
+
+        grid.appendChild(card);
+      }
+      grid.setAttribute('aria-busy','false');
+    }
+
+    function escapeHtml(str){ return String(str).replace(/[&<>"']/g, s=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[s]) ); }
+
+    // ====== CRUD ======
+    function waterNow(id){
+      const idx = store.plants.findIndex(p=> p.id===id);
+      if(idx<0) return;
+      const last = new Date(); last.setHours(0,0,0,0); // 日付単位
+      const p = store.plants[idx];
+      const next = calcNext(last, p.freq);
+      const updated = {...p, last, next, notifiedFor:null};
+      store.plants = Object.assign([...store.plants], {[idx]:updated});
+    }
+
+    function deletePlant(id){
+      if(!confirm('この植物を削除しますか？')) return;
+      store.plants = store.plants.filter(p=> p.id!==id);
+    }
+
+    // ====== ダイアログ ======
+    const dialog = $('#plantDialog');
+    const form = $('#plantForm');
+    const deleteBtn = $('#deleteBtn');
+
+    function openDialog(mode, id){
+      store.selectedId = id || null;
+      $('#dialogTitle').textContent = mode==='edit' ? '植物を編集' : '植物を追加';
+      deleteBtn.hidden = mode!=='edit';
+
+      const today = toDateInput(new Date());
+      $('#last').value = today;
+      $('#freq').value = 7;
+      $('#name').value = '';
+      $('#species').value = '';
+      $('#notes').value = '';
+
+      if(mode==='edit' && id){
+        const p = store.plants.find(x=> x.id===id);
+        if(p){
+          $('#name').value = p.name;
+          $('#species').value = p.species||'';
+          $('#freq').value = p.freq;
+          $('#last').value = toDateInput(new Date(p.last));
+          $('#notes').value = p.notes||'';
+        }
+        deleteBtn.onclick = ()=>{ deletePlant(id); dialog.close(); };
+      }
+
+      dialog.showModal();
+    }
+
+    $('#addBtn').onclick = ()=> openDialog('add');
+
+    form.addEventListener('close', ()=>{});
+    form.addEventListener('submit', (e)=> e.preventDefault());
+
+    $('#saveBtn').onclick = ()=>{
+      const name = $('#name').value.trim(); if(!name) return alert('名前を入れてね');
+      const species = $('#species').value.trim();
+      const freq = Math.max(1, Math.min(60, Number($('#freq').value||7)));
+      const last = parseDateInput($('#last').value || toDateInput(new Date()));
+      const notes = $('#notes').value.trim();
+      const next = calcNext(last, freq);
+
+      if(store.selectedId){
+        store.plants = store.plants.map(p=> p.id===store.selectedId ? {...p, name, species, freq, last, next, notes, notifiedFor:null} : p);
+      }else{
+        store.plants = [...store.plants, { id:uid(), name, species, freq, last, next, notes, notifiedFor:null, createdAt: nowISO() }];
+      }
+      dialog.close();
+    };
+
+    // ====== フィルタとテーマ ======
+    $('#filters').addEventListener('click', (e)=>{
+      const b = e.target.closest('[data-filter]'); if(!b) return;
+      store.filter = b.dataset.filter;
+      $$('#filters .seg').forEach(x=> x.setAttribute('aria-pressed', x===b ? 'true' : 'false'));
+    });
+
+    $('#themeBtn').onclick = ()=>{
+      store.theme = store.theme==='light' ? 'dark' : 'light';
+      localStorage.setItem('leaflog_theme', store.theme);
+    };
+
+    // ====== 通知ボタン、バックアップ・復元 ======
+    $('#notifBtn').onclick = requestNotif;
+
+    $('#backupBtn').onclick = ()=>{
+      const data = JSON.stringify(store.plants.map(p=>({...p, last:p.last.toISOString(), next:p.next.toISOString()})), null, 2);
+      const blob = new Blob([data], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `leaflog-backup-${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      setTimeout(()=> URL.revokeObjectURL(url), 1000);
+    };
+
+    $('#restoreInput').addEventListener('change', async (e)=>{
+      const file = e.target.files[0]; if(!file) return;
+      try{
+        const text = await file.text();
+        const arr = JSON.parse(text);
+        const restored = arr.map(p=> ({...p, last:new Date(p.last), next:new Date(p.next)}));
+        store.plants = restored;
+        alert('復元しました');
+      }catch(err){ alert('読み込みに失敗しました'); }
+      e.target.value = '';
+    });
+
+    // ====== 時計（おまけ） ======
+    function tick(){
+      const d=new Date(); $('#clock').textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    setInterval(tick, 1000); tick();
+
+    // ====== 初期化 ======
+    (function init(){
+      // フィルタUI初期化
+      $$('#filters .seg').forEach(x=> x.setAttribute('aria-pressed', x.dataset.filter==='all' ? 'true' : 'false'));
+      render();
+      pollDue();
+    })();
+  </script>
+</body>
+</html>
